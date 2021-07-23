@@ -42,7 +42,7 @@ jobs:
               VERSION="${{ github.event.release.tag_name }}"
             else
               LATEST=`git describe --abbrev=0 --tags`
-              VERSION=`echo ${LATEST} | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g'`
+              VERSION=`echo ${LATEST} | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g'`-${{ github.sha }}
           fi
           echo ::set-output name=version::${VERSION}
       - name: Cache local Gradle repository
@@ -80,6 +80,7 @@ jobs:
           export version=${{needs.release.outputs.version}}
           sed -i "s/appVersion:.*/appVersion: ${version}/" charts/odd-platform/Chart.yaml
       - name: add chart
+        if: ${{ github.event.action == 'published' }}
         run: |
           export VERSION=${{needs.release.outputs.version}}
           MSG=$(helm package --app-version ${VERSION} charts/odd-platform)
