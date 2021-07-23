@@ -5,18 +5,10 @@ on:
 
   workflow_dispatch:
     inputs:
-      customVersion:
-        description: 'A new version for release'
-        required: false
-        default: '0.0.0'
       rebuild:
         description: 'A tag name for building previously created release'
         required: false
-        default: 'v0.0.0'
-      extraGradleOptions:
-        description: 'A extra options for Gradle'
-        required: false
-        default: ''
+        default: '0.0.0'
 
 jobs:
   release:
@@ -24,10 +16,6 @@ jobs:
     outputs:
       version: ${{steps.get-version.outputs.version}}
     steps:
-      - name: Check version
-        id: get-version
-        run: |
-          echo ::set-output name=version::0.0.0
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
       - name: Set up Docker Buildx
@@ -46,6 +34,17 @@ jobs:
       - run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
+      - name: Check version
+        id: get-version
+        run: |
+          if [[ "${{ github.event.action }}" == "published" ]]
+            then
+              VERSION="${{ github.event.release.tag_name }}"
+            else
+              LATEST=`git describe --abbrev=0 --tags`
+              VERSION=`echo ${LATEST} | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g'`
+          fi
+          echo ::set-output name=version::${VERSION}
       - name: Cache local Gradle repository
         uses: actions/cache@v2
         with:
@@ -61,9 +60,9 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Build with Gradle
-        id: build
+        env:
+          CI: false
         run: |
-          java -version
           ./gradlew clean build -P version=${{ steps.get-version.outputs.version }}
   charts:
     runs-on: ubuntu-latest
@@ -79,11 +78,11 @@ jobs:
       - name: update appVersion
         run: |
           export version=${{needs.release.outputs.version}}
-          sed -i "s/appVersion:.*/appVersion: ${version}/" charts/kafka-ui/Chart.yaml
+          sed -i "s/appVersion:.*/appVersion: ${version}/" charts/odd-platform/Chart.yaml
       - name: add chart
         run: |
           export VERSION=${{needs.release.outputs.version}}
-          MSG=$(helm package --app-version ${VERSION} charts/kafka-ui)
+          MSG=$(helm package --app-version ${VERSION} charts/odd-platform)
           git fetch origin
           git stash
           git checkout -b gh-pages origin/gh-pages
